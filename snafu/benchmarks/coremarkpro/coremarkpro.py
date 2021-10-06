@@ -34,6 +34,7 @@ class Coremarkpro(Benchmark):
                 dest="context",
                 type=int,
                 help="CoreMark Pro's context",
+                default=0,
                 required=False,
                 ),
             ConfigArgument(
@@ -42,6 +43,7 @@ class Coremarkpro(Benchmark):
                 help="CoreMark Pro's workloads",
                 dest="workload",
                 type=int,
+                default=0,
                 required=False,
                 ),
             ConfigArgument(
@@ -215,4 +217,4 @@ class Coremarkpro(Benchmark):
 
 
     def cleanup(self):
-        return True
+        return rue
