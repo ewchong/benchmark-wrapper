@@ -65,6 +65,8 @@ class Coremarkpro(Benchmark):
                 ),
             )
 
+    result_config = {}
+
 
     """ Helper functions"""
 
@@ -76,39 +78,54 @@ class Coremarkpro(Benchmark):
             xcmd += f" -w{self.config.workload} "
         return shlex.split(f"make TARGET=linux64 certify-all XCMD='{xcmd}'")
 
-    def parse_raw_logs(self):
+    def create_raw_results(self) -> Iterable[BenchmarkResult]:
         headers = ['uid', 'suite', 'name', 'ctx', 'wrk', 'fails', 't(s)', 'iter', 'iter/s', 'codesize', 'datasize']
         types = [str, str, str, int, int, int, float, int, float, int, int]
 
         with open(self.config.path + 'builds/linux64/gcc64/logs/linux64.gcc64.log', 'rt') as file:
             results = []
+            prev_run_type = ""
             run_type = ""
+            run_index = 0
             run_starttime = ""
             for line in file:
+                # Look for the following string in the logs:
+                #    Results for `run_type` started at `timestamp`
                 result = re.search(r'^#Results for (\w+) .* (\d+:\d+:\d+:\d+) XCMD', line)
                 if result:
+                    prev_run_type = run_type
                     (run_type, run_starttime) = result.group(1,2)
                     continue
+
+                # Ignore median results since it can be derived
                 if 'median' not in line:
-                    #result = re.search(r'^#Results for (\w+) .* (\d+:\d+:\d+:\d+) XCMD', line)
-                    #result = re.search(r'^#Results for (\w+) .* (\d+:\d+:\d+:\d+) XCMD', line)
                     if re.search(r'^\d+', line):
+                        if prev_run_type != run_type:
+                            run_index = 0
+                            prev_run_type = run_type
                         cols = re.split(r'\s+', line.rstrip())
                         converted_cols = [func(val) for func, val in zip(types, cols)]
                         record = dict(zip(headers, converted_cols))
                         record['type'] = run_type
                         record['starttime'] = self.convert_coremark_timestamp(run_starttime)
+                        record['run_index'] = run_index
+                        run_index += 1
                         results.append(record)
+                        yield self.create_new_result(
+                                data=record,
+                                config=self.result_config,
+                                tag="raw",
+                                )
 
-            return results
 
-    def parse_marks(self):
+
+    def create_summary_results(self) -> Iterable[BenchmarkResult]:
+
         headers = ['name',  'multicore', 'singlecore', 'scaling']
         types = [str, float, float, float]
-        test_results = []
+
         with open(self.config.path + 'builds/linux64/gcc64/logs/linux64.gcc64.mark', 'rt') as file:
             table_name = ""
-            results = {}
             for line in file:
                 line = line.rstrip()
                 if not line:
@@ -126,34 +143,15 @@ class Coremarkpro(Benchmark):
                 cols = re.split(r'\s+', line.rstrip())
                 converted_cols = [func(val) for func, val in zip(types, cols)]
                 record = dict(zip(headers, converted_cols))
-                record['type'] = table_name
-                test_results.append(record)
+                record["type"] = table_name
 
-        return test_results
+                yield self.create_new_result(
+                        data=record,
+                        config=self.result_config,
+                        tag="summary",
+                        )
 
-    def submit_results(self, sample_starttime) -> BenchmarkResult:
 
-        test_config = {
-                "workload": self.config.workload,
-                "context": self.config.context,
-                }
-        result_summary = {
-                #"clustername": self.config.cluster_name,
-                "date": sample_starttime,
-                "sample": self.config.sample,
-                "test_config": test_config,
-                }
-
-        test_results = {
-                "summary_results": self.parse_marks(),
-                "raw_results": self.parse_raw_logs()
-                }
-
-        return self.create_new_result(
-                data=test_results,
-                config=result_summary,
-                tag="results",
-                )
 
     def convert_coremark_timestamp(self, timestamp):
         from dateutil import tz
@@ -167,6 +165,8 @@ class Coremarkpro(Benchmark):
 
     def setup(self) -> bool:
 
+        # Check if coremark pro folder exists
+
         # Parse the command line args
         self.config.parse_args()
 
@@ -175,6 +175,11 @@ class Coremarkpro(Benchmark):
         self.config.user = os.getenv("test_user", "myuser")
         if "clustername" not in os.environ:
             self.config.cluster_name = "mycluster"
+
+        self.result_config['test_config'] = {
+                "workload": self.config.workload,
+                "context": self.config.context,
+                }
 
         return True
 
@@ -187,6 +192,8 @@ class Coremarkpro(Benchmark):
                 self.logger.info(f"Starting coremark-pro sample number {sample_num}")
 
                 sample_starttime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                self.result_config['sample_starttime'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                self.result_config['sample'] = self.config.sample
 
                 # Runs the actual command
                 sample: ProcessSample = sample_process(
@@ -197,10 +204,14 @@ class Coremarkpro(Benchmark):
                     self.logger.critical(f"Failed to run! Got results: {sample}")
                     return
                 else:
-                    yield self.submit_results(sample_starttime)
+                    yield from self.create_raw_results()
+                    yield from self.create_summary_results()
         else:
             sample_starttime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            yield self.submit_results(sample_starttime)
+            self.result_config['sample_starttime'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            self.result_config['sample'] = self.config.sample
+            yield from self.create_raw_results()
+            yield from self.create_summary_results()
 
 
     def cleanup(self):
