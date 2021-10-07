@@ -8,7 +8,7 @@ import uuid
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from snafu.config import ConfigArgument
 from snafu.benchmarks import Benchmark, BenchmarkResult
-from snafu.process import sample_process, ProcessSample
+from snafu.process import sample_process
 import subprocess
 import os
 import re
@@ -54,8 +54,7 @@ class Coremarkpro(Benchmark):
                 default=1,
                 type=int,
                 help="Number of times to run the benchmark",
-                required=False,
-                ),
+                required=False,),
             ConfigArgument(
                 "-u",
                 "--upload",
@@ -190,17 +189,15 @@ class Coremarkpro(Benchmark):
         cmd = self.build_workload_cmd()
 
         if not self.config.upload:
-            for sample_num in range(1, self.config.sample + 1):
-                self.logger.info(f"Starting coremark-pro sample number {sample_num}")
+            samples = sample_process(
+                    cmd,
+                    self.logger,
+                    retries=2,
+                    expected_rc=0,
+                    cwd=self.config.path
+                    )
 
-                sample_starttime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-                self.result_config['sample_starttime'] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-                self.result_config['sample'] = self.config.sample
-
-                # Runs the actual command
-                sample: ProcessSample = sample_process(
-                        cmd, self.logger, retries=2, expected_rc=0,  cwd=self.config.path
-                        )
+            for sample_num, sample in enumerate(samples):
 
                 if not sample.success:
                     self.logger.critical(f"Failed to run! Got results: {sample}")
@@ -217,4 +214,4 @@ class Coremarkpro(Benchmark):
 
 
     def cleanup(self):
-        return rue
+        return True
