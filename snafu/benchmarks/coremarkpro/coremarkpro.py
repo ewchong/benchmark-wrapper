@@ -26,7 +26,7 @@ class Coremarkpro(Benchmark):
             "--path",
             dest="path",
             type=str,
-            help="Path to the coremark-pro's directory",
+            help="Path to coremark-pro's directory",
             required=True,
         ),
         ConfigArgument(
@@ -55,6 +55,15 @@ class Coremarkpro(Benchmark):
             default=1,
             type=int,
             help="Number of times to run the benchmark",
+            required=False,
+        ),
+        ConfigArgument(
+            "-r",
+            "--result-name",
+            dest="result_name",
+            default="builds/linux64/gcc64/logs/linux64.gcc64",
+            type=str,
+            help="Name of CoreMark Pro's result files. Path is relative to `--path` and no extenstion.",
             required=False,
         ),
         ConfigArgument(
@@ -100,9 +109,7 @@ class Coremarkpro(Benchmark):
         ]
         types = [str, str, str, int, int, int, float, int, float, int, int]
 
-        with open(
-            self.config.path + "builds/linux64/gcc64/logs/linux64.gcc64.log", "rt", encoding="utf-8"
-        ) as file:
+        with open(self.config.path + self.config.result_name + ".log", "rt", encoding="utf-8") as file:
             results = []
             prev_run_type = ""
             run_type = ""
@@ -120,6 +127,8 @@ class Coremarkpro(Benchmark):
                 # Ignore median results since it can be derived
                 if "median" not in line:
                     if re.search(r"^\d+", line):
+                        # Adds a basic sequence number for the runs to avoid performance
+                        # runs with the same result from being flagged as a duplicate.
                         if prev_run_type != run_type:
                             run_index = 0
                             prev_run_type = run_type
@@ -145,9 +154,7 @@ class Coremarkpro(Benchmark):
         headers = ["name", "multicore", "singlecore", "scaling"]
         types = [str, float, float, float]
 
-        with open(
-            self.config.path + "builds/linux64/gcc64/logs/linux64.gcc64.mark", "rt", encoding="utf-8"
-        ) as file:
+        with open(self.config.path + self.config.result_name + ".mark", "rt", encoding="utf-8") as file:
             table_name = ""
             for line in file:
                 line = line.rstrip()
@@ -189,10 +196,22 @@ class Coremarkpro(Benchmark):
 
     def setup(self) -> bool:
 
-        # Check if coremark pro folder exists
-
         # Parse the command line args
         self.config.parse_args()
+
+        self.logger.info("Building CoreMark Pro")
+        build = sample_process(
+            ["make", "build"],
+            self.logger,
+            retries=2,
+            expected_rc=0,
+            cwd=self.config.path,
+            env=self.config.get_env(),
+        )
+        result = next(iter(build))
+        if not result.success:
+            self.logger.critical(f"Failed to buiild CoreMark Pro! Got results: {result}")
+            return False
 
         # Sets up defaults for the required variables
         self.config.uuid = os.getenv("uuid", str(uuid.uuid4()))
@@ -212,7 +231,15 @@ class Coremarkpro(Benchmark):
         cmd = self.build_workload_cmd()
 
         if not self.config.upload:
-            samples = sample_process(cmd, self.logger, retries=2, expected_rc=0, cwd=self.config.path)
+            samples = sample_process(
+                cmd,
+                self.logger,
+                num_samples=self.config.sample,
+                retries=2,
+                expected_rc=0,
+                cwd=self.config.path,
+                env=self.config.get_env(),
+            )
 
             for sample_num, sample in enumerate(samples):
                 self.logger.info(f"Starting coremark-pro sample number {sample_num}")
