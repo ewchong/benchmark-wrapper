@@ -21,13 +21,13 @@ logger = logging.getLogger("snafu")
 
 
 class trigger_sysbench:
-    def __init__(self, uuid, user, cluster_name, sysbench_file, sample):
+    def __init__(self, uuid, user, cluster_name, sysbench_file, sample_index):
 
         self.uuid = uuid
         self.user = user
         self.cluster_name = cluster_name
         self.sysbench_file = sysbench_file
-        self.sample = sample
+        self.sample_index = sample_index
 
         #  blank dictionary to capture test configuration
         self.test_config = {}
@@ -79,9 +79,9 @@ class trigger_sysbench:
         sysbench_result_summary = {
             "uuid": self.uuid,
             "user": self.user,
-            "clustername": self.cluster_name,
+            "cluster_name": self.cluster_name,
             "date": sample_starttime,
-            "sample": self.sample,
+            "sample_index": self.sample_index,
             "test_config": self.test_config,
         }
         #  this needs to be filled out when parsing stdout results
