@@ -81,6 +81,7 @@ class trigger_sysbench:
             "user": self.user,
             "cluster_name": self.cluster_name,
             "date": sample_starttime,
+            "sample_starttime": sample_starttime,
             "sample": self.sample,
             "test_config": self.test_config,
         }

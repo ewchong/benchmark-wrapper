@@ -247,6 +247,7 @@ class Coremarkpro(Benchmark):
                 self.logger.info(f"Starting coremark-pro sample number {sample_num}")
 
                 self.result_config["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                self.result_config["sample_starttime"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 self.result_config["sample"] = sample_num
                 if not sample.success:
                     self.logger.critical(f"Failed to run! Got results: {sample}")
@@ -255,6 +256,7 @@ class Coremarkpro(Benchmark):
                     yield from self.create_summary_results()
         else:
             self.result_config["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            self.result_config["sample_starttime"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             self.result_config["sample"] = self.config.sample
             yield from self.create_raw_results()
             yield from self.create_summary_results()
