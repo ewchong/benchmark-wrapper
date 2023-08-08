@@ -83,6 +83,14 @@ class Coremarkpro(Benchmark):
             help="A tag prefix - can be specified if running autobench",
             required=False,
         ),
+        ConfigArgument(
+            "--raw-only",
+            dest="raw_results_only",
+            default=False,
+            type=bool,
+            help="Only parse raw results",
+            required=False,
+        ),
     )
 
     result_config: Dict = {}
@@ -266,7 +274,7 @@ class Coremarkpro(Benchmark):
                 else:
                     yield from self.create_raw_results()
 
-                    if self.config.path != "autobench/" :
+                    if not self.config.raw_results_only:
                         yield from self.create_summary_results()
         else:
             self.result_config["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
