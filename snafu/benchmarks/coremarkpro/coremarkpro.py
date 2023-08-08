@@ -1,5 +1,5 @@
 # /usr/bin/env python3
-"""Runs CoreMark Pro."""
+"""Runs CoreMark-Pro or AutoBench."""
 import re
 import shlex
 import uuid
@@ -14,17 +14,18 @@ from snafu.process import sample_process
 
 
 class Coremarkpro(Benchmark):
-    """Wrapper for CoreMark Pro"""
+    """Wrapper for AutoBench and CoreMark-Pro"""
 
     # Set for Benchmark Class
     tool_name = "coremark-pro"
+#    tool_name = "autobench"
     args = (
         ConfigArgument(
             "-p",
             "--path",
             dest="path",
             type=str,
-            help="Path to coremark-pro's directory",
+            help="Path to workloads's directory (i.e. CoreMark-Pro or AutoBench)",
             required=True,
         ),
         ConfigArgument(
@@ -32,14 +33,14 @@ class Coremarkpro(Benchmark):
             "--context",
             dest="context",
             type=int,
-            help="CoreMark Pro's context",
+            help="CoreMark-Pro or AutoBench context",
             default=1,
             required=False,
         ),
         ConfigArgument(
             "-w",
             "--worker",
-            help="CoreMark Pro's worker",
+            help="CoreMark-Pro or AutoBench worker",
             dest="worker",
             type=int,
             default=0,
@@ -61,7 +62,7 @@ class Coremarkpro(Benchmark):
             dest="result_name",
             default="builds/linux64/gcc64/logs/linux64.gcc64",
             type=str,
-            help="Name of CoreMark Pro's result files. Path is relative to `--path` and no extenstion.",
+            help="Name of CoreMark-Pro or AutoBench result files. Path is relative to `--path` and no extention.",
             required=False,
         ),
         ConfigArgument(
@@ -70,7 +71,16 @@ class Coremarkpro(Benchmark):
             dest="ingest",
             default=False,
             type=bool,
-            help="Ingest results from previous CoreMark Run",
+            help="Ingest results from previous CoreMark-Pro or AutoBench Run",
+            required=False,
+        ),
+        ConfigArgument(
+            "-x",
+            "--tagprefix",
+            dest="tag_prefix",
+            default=False,
+            type=str,
+            help="A tag prefix - can be specified if running autobench",
             required=False,
         ),
     )
@@ -81,15 +91,19 @@ class Coremarkpro(Benchmark):
 
     def build_workload_cmd(self) -> List[str]:
         """
-        Builds the command line arguments needed to run CoreMark Pro
+        Builds the command line arguments needed to run AutoBench or CoreMark-Pro
         """
 
         xcmd = f" -c{self.config.context} -w{self.config.worker}"
-        return shlex.split(f"make TARGET=linux64 certify-all XCMD='{xcmd}'")
+
+        if self.config.path == "autobench/" :
+            return shlex.split(f"make TARGET=linux64 certify-all")
+        else :
+            return shlex.split(f"make TARGET=linux64 certify-all XCMD='{xcmd}'")
 
     def create_raw_results(self) -> Iterable[BenchmarkResult]:
         """
-        Parses the raw results logs from CoreMark Pro into a Benchmark result. Ignores any median results.
+        Parses the raw results logs from AutoBench or CoreMark-Pro into a Benchmark result. Ignores any median results.
         """
 
         headers = [
@@ -141,12 +155,12 @@ class Coremarkpro(Benchmark):
                         yield self.create_new_result(
                             data=record,
                             config=self.result_config,
-                            tag="raw",
+                            tag=self.config.tag_prefix + "-raw",
                         )
 
     def create_summary_results(self) -> Iterable[BenchmarkResult]:
         """
-        Parses the CoreMark Pro's 'mark' file which has the scores calculated
+        Parses the CoreMark-Pro's 'mark' file which has the scores calculated
         """
 
         headers = ["name", "multicore", "singlecore", "scaling"]
@@ -184,7 +198,7 @@ class Coremarkpro(Benchmark):
     @staticmethod
     def convert_coremark_timestamp(timestamp) -> str:
         """
-        Converts CoreMark Pro's timestamp in the raw logs into a ES friendly date format
+        Converts CoreMark-Pro or AutoBench timestamp in the raw logs into a ES friendly date format
         """
 
         time_obj = datetime.strptime(timestamp, "%y%j:%H:%M:%S")
@@ -197,7 +211,7 @@ class Coremarkpro(Benchmark):
         # Parse the command line args
         self.config.parse_args()
 
-        self.logger.info("Building CoreMark Pro")
+        self.logger.info("Building CoreMark-Pro or AutoBench")
         build = sample_process(
             ["make", "build"],
             self.logger,
@@ -208,7 +222,7 @@ class Coremarkpro(Benchmark):
         )
         result = next(iter(build))
         if not result.success:
-            self.logger.critical(f"Failed to buiild CoreMark Pro! Got results: {result}")
+            self.logger.critical(f"Failed to build CoreMark-Pro or AutoBench! Got results: {result}")
             return False
 
         # Sets up defaults for the required variables
@@ -251,7 +265,9 @@ class Coremarkpro(Benchmark):
                     self.logger.critical(f"Failed to run! Got results: {sample}")
                 else:
                     yield from self.create_raw_results()
-                    yield from self.create_summary_results()
+
+                    if self.config.path != "autobench/" :
+                        yield from self.create_summary_results()
         else:
             self.result_config["date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             self.result_config["sample"] = self.config.sample
