@@ -1,5 +1,5 @@
 # /usr/bin/env python3
-"""Runs CoreMark-Pro or AutoBench."""
+"""Runs CoreMark-Pro."""
 import re
 import shlex
 import uuid
@@ -14,18 +14,17 @@ from snafu.process import sample_process
 
 
 class Coremarkpro(Benchmark):
-    """Wrapper for AutoBench and CoreMark-Pro"""
+    """Wrapper for CoreMark-Pro"""
 
     # Set for Benchmark Class
     tool_name = "coremark-pro"
-#    tool_name = "autobench"
     args = (
         ConfigArgument(
             "-p",
             "--path",
             dest="path",
             type=str,
-            help="Path to workloads's directory (i.e. CoreMark-Pro or AutoBench)",
+            help="Path to workloads's directory",
             required=True,
         ),
         ConfigArgument(
@@ -33,14 +32,14 @@ class Coremarkpro(Benchmark):
             "--context",
             dest="context",
             type=int,
-            help="CoreMark-Pro or AutoBench context",
+            help="Number of context (threads)",
             default=1,
             required=False,
         ),
         ConfigArgument(
             "-w",
             "--worker",
-            help="CoreMark-Pro or AutoBench worker",
+            help="Number of workers",
             dest="worker",
             type=int,
             default=0,
@@ -62,7 +61,7 @@ class Coremarkpro(Benchmark):
             dest="result_name",
             default="builds/linux64/gcc64/logs/linux64.gcc64",
             type=str,
-            help="Name of CoreMark-Pro or AutoBench result files. Path is relative to `--path` and no extention.",
+            help="Name of result files. Path is relative to `--path` and no extension.",
             required=False,
         ),
         ConfigArgument(
@@ -71,16 +70,16 @@ class Coremarkpro(Benchmark):
             dest="ingest",
             default=False,
             type=bool,
-            help="Ingest results from previous CoreMark-Pro or AutoBench Run",
+            help="Ingest results from previous run",
             required=False,
         ),
         ConfigArgument(
             "-x",
-            "--tagprefix",
+            "--tag-prefix",
             dest="tag_prefix",
             default=False,
             type=str,
-            help="A tag prefix - can be specified if running autobench",
+            help="A tag prefix for the ES index",
             required=False,
         ),
         ConfigArgument(
@@ -104,10 +103,7 @@ class Coremarkpro(Benchmark):
 
         xcmd = f" -c{self.config.context} -w{self.config.worker}"
 
-        if self.config.path == "autobench/" :
-            return shlex.split(f"make TARGET=linux64 certify-all")
-        else :
-            return shlex.split(f"make TARGET=linux64 certify-all XCMD='{xcmd}'")
+        return shlex.split(f"make TARGET=linux64 certify-all XCMD='{xcmd}'")
 
     def create_raw_results(self) -> Iterable[BenchmarkResult]:
         """
